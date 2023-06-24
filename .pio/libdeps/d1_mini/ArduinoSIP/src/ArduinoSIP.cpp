@@ -75,6 +75,12 @@ void Sip::Init(const char *SipIp, int SipPort, const char *MyIp, int MyPort, con
   iAuthCnt = 0;
   iRingTime = 0;
   iMaxTime = MaxDialSec * 1000;
+  register_status = false;
+}
+
+bool Sip::isRegister(){
+
+  return register_status;
 }
 
 
@@ -312,6 +318,8 @@ void Sip::Ack(const char *p) {
 }
 
 
+
+
 void Sip::Cancel(int cseq) {
   
   if ( caRead[0] == 0 )
@@ -360,6 +368,24 @@ void Sip::Ok(const char *p) {
   SendUdp();
 }
 
+void Sip::Register(const char *pIn){
+  
+  int   cseq = 1;
+  AddSipLine("REGISTER %s SIP/2.0", pSipIp);
+	AddSipLine("From: \"%s\"  <sip:%s@%s>", pDialDesc, pSipUser, pSipIp);
+	AddSipLine("To: %s", pSipIp);
+	AddSipLine("Contact: \"%s\" <sip:%s@%s>", pSipUser, pSipUser, pMyIp);
+	AddSipLine("Call-ID: %010u@%s",  callid, pMyIp);
+  AddSipLine("CSeq: %i REGISTER",  cseq);
+  AddSipLine("Max-Forwards: 70");
+  AddSipLine("Expires: 3600"); // Set the desired expiration time 
+  AddSipLine("User-Agent: sip-client/0.0.1");
+  AddSipLine("Content-Length: 0");
+  AddSipLine("");
+  caRead[0] = 0;
+  SendUdp();
+
+}
 
 // Call invite without or with the response from peer
 void Sip::Invite(const char *p) {

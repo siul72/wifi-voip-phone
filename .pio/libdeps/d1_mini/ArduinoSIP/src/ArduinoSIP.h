@@ -53,13 +53,15 @@ class Sip
     Sip(char *pBuf, size_t lBuf);
 	~Sip();
     
-	
-	void        Init(const char *SipIp, int SipPort, const char *MyIp, int MyPort, const char *SipUser, const char *SipPassWd, int MaxDialSec = 10);
-    bool        Dial(const char *DialNr, const char *DialDesc = "");
-	void		Processing(char *pBuf, size_t lBuf);
-    bool        IsBusy() { return iRingTime != 0; }	
+    void Init(const char *SipIp, int SipPort, const char *MyIp, int MyPort, const char *SipUser, const char *SipPassWd, int MaxDialSec = 10);
+    void Register(const char *pIn = 0);
+    bool isRegister();
+    bool Dial(const char *DialNr, const char *DialDesc = "");
+	  void Processing(char *pBuf, size_t lBuf);
+    bool IsBusy() { return iRingTime != 0; }	
 	
   private:
+  bool register_status;
     char       *pbuf;
     size_t      lbuf;
     char        caRead[256];
@@ -96,6 +98,7 @@ class Sip
     void        Bye(int cseq);
     void        Ok(const char *pIn);
     void        Invite(const char *pIn = 0);
+    
 
     uint32_t    Millis();
     uint32_t    Random();

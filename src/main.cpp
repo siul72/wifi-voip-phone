@@ -3,22 +3,28 @@
 #include <WiFiManager.h>         //https://github.com/tzapu/WiFiManager
 #include <TaskScheduler.h>
 #include <ESP8266Ping.h>
+#include <ArduinoSIP.h>
   
 #include "utils.h"
 
 #define  LED_WATCHDOG 2
 #define  MAX_DIAL_STRING 64
+#define DEBUGLOG
  
+char acSipIn[2048];
+char acSipOut[2048];
 
+Sip SipClient(acSipOut, sizeof(acSipOut));
 void wifiConnect();
- 
 void toggleLed();
- 
+void sipListen();
+void sipRegisterClient();
 
-Task wifiConnectTask(1000, TASK_ONCE, &wifiConnect);
+Task wifiConnectTask(1000, TASK_FOREVER, &wifiConnect);
+Task sipListenTask(1000, TASK_FOREVER, &sipListen);
+Task sipRegisterTask(1000, TASK_FOREVER, &sipRegisterClient);
 Task toggleLedTask(1000, TASK_FOREVER, &toggleLed);
  
-
 WiFiManager wm;
  
 char sip_server_str[256];
@@ -37,6 +43,7 @@ uint16 sip_port;
  
 char msg[256];
 uint16 signal_was;
+uint16 register_count_timeout = 0;
  
 
 void testPing(String host){
@@ -53,26 +60,33 @@ void testPing(String host){
   void toggleLed(){
     digitalWrite(LED_WATCHDOG, !digitalRead(LED_WATCHDOG));
     
+    if (!SipClient.isRegister() && register_count_timeout> 60){
+      register_count_timeout = 0;
+      sprintf(msg, "Unable to register");
+      Serial.println(msg);
+      //wm.resetSettings();
+      //runner.addTask(wifiConnectTask);
+      //wifiConnectTask.enable();
+      //toggleLedTask.disable();
+      //sipListenTask.disable();
+      //sipRegisterTask.disable();
+
+    } else {
+      register_count_timeout++;
+    }
+    
+
   }
-
-void connectToMqtt() {
-  Serial.println("Connecting to SIP SERVER...");
-  digitalWrite(LED_WATCHDOG, !digitalRead(LED_WATCHDOG));
-  testPing(sip_server_address_param.getValue());
-
-  digitalWrite(LED_WATCHDOG, !digitalRead(LED_WATCHDOG));
-  //sip.register();
-  digitalWrite(LED_WATCHDOG, !digitalRead(LED_WATCHDOG));
-}
+ 
 
 
 void wifiConnect() {
     digitalWrite(LED_WATCHDOG, !digitalRead(LED_WATCHDOG));
     wifiConnectTask.disable();
-    runner.deleteTask(wifiConnectTask);
+    //runner.deleteTask(wifiConnectTask);
     WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
     //reset settings - wipe credentials for testing
-    // wm.resetSettings();
+    //wm.resetSettings();
     // set dark theme
     //wm.setClass("invert");
     // add a custom input field
@@ -95,17 +109,40 @@ void wifiConnect() {
       
       String sip_server_address = String(sip_server_address_param.getValue());
       //Serial.println("connected1");
-      IPAddress ip;
-      //ip.fromString(mqtt_address_param.getValue());
+      //IPAddress sip_ip;
+      //sip_ip.fromString(sip_server_address_param.getValue());
       sip_port = atoi(sip_port_param.getValue());
       //dial_timeout =  atoi(dial_timeout_param.getValue());
       //dial_digits = atoi(dial_digits_param.getValue());
       //Serial.println("connected3");
-      sprintf(msg, "Try to register to SIP Server address %s:%d", sip_server_address.c_str(), sip_port);
-      Serial.println(msg);
+     
       //mqttClient.setServer(ip, mqtt_port);
-      //mqttReconnectTask.enable();
+      SipClient.Init(sip_server_address.c_str(), sip_port, sip_server_address.c_str(), sip_port, sip_user_name_str, sip_user_password_str, 15);
+      toggleLedTask.enable();
+      sipRegisterTask.enable();
     }
+ }
+
+ void sipRegisterClient(){
+      Serial.println(">>sipRegisterClient");
+      sipRegisterTask.disable();
+      //runner.deleteTask(sipRegisterTask); 
+      //Task sipRegisterTask(1000, TASK_ONCE, &sipRegisterClient);
+      //runner.addTask(sip)
+      //sprintf(msg, "Try to register to SIP Server address %s:%d", sip_server_address.c_str(), sip_port);
+      //Serial.println(msg);
+      SipClient.Register();
+      sipListenTask.enable();
+      //sipRegisterTask.setInterval(5000);
+      //sipRegisterTask.enable();
+      Serial.println("<<sipRegisterClient");
+ }
+
+ void sipListen(){
+  Serial.println(">>sipListen");
+   // SIP processing
+  SipClient.Processing(acSipIn, sizeof(acSipIn));
+  Serial.println("<<sipListen");
  }
 
  /***********************************************/
@@ -113,20 +150,16 @@ void wifiConnect() {
 
  void setup() {
        pinMode(LED_WATCHDOG, OUTPUT);
- 
        signal_was = LOW;
-       
        digitalWrite(LED_WATCHDOG, !digitalRead(LED_WATCHDOG));
        Serial.begin(115200);
-       
        runner.init();
-       Serial.println("Initialized scheduler");
        runner.addTask(wifiConnectTask);
-       wifiConnectTask.enable();
-       Serial.println("added and enable wifiConnectTask");
        runner.addTask(toggleLedTask);
-       Serial.println("Ksoft tone spy started");
-
+       runner.addTask(sipListenTask);
+       runner.addTask(sipRegisterTask);
+       wifiConnectTask.enable();
+       Serial.println("Setup ready");
   }
 
 void loop() {
