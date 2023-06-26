@@ -53,7 +53,7 @@ class Sip
     Sip(char *pBuf, size_t lBuf);
 	~Sip();
     
-    void Init(const char *SipIp, int SipPort, const char *MyIp, int MyPort, const char *SipUser, const char *SipPassWd, int MaxDialSec = 10);
+    void Init(const char * SipServerAddress, int SipPort, const char *MyIp, int MyPort, const char *SipUser, const char *SipPassWd, int MaxDialSec = 10);
     void Register(const char *pIn = 0);
     bool isRegister();
     bool Dial(const char *DialNr, const char *DialDesc = "");
@@ -62,16 +62,16 @@ class Sip
 	
   private:
   bool register_status;
-    char       *pbuf;
-    size_t      lbuf;
+    char       *message_buffer;
+    size_t      buffer_size;
     char        caRead[256];
 
-    const char *pSipIp;
-    int         iSipPort;
-    const char *pSipUser;
-    const char *pSipPassWd;
-    const char *pMyIp;
-    int         iMyPort;
+    String sip_server_address;
+    int       sip_server_port;
+    String sip_user_name;
+    String sip_user_password;
+    String local_ip_address;
+    int local_ip_port;
     const char *pDialNr;
     const char *pDialDesc;
 
@@ -86,7 +86,7 @@ class Sip
     int         iLastCSeq;
     
 	WiFiUDP 	Udp;
-	
+	void calculateMd5Hash(const char*pIn, char *caRealm, char *caNonce, char *haResp);
 	void        HandleUdpPacket(const char *p);
 	void        AddSipLine(const char* constFormat , ... );
     bool        AddCopySipLine(const char *p, const char *psearch);

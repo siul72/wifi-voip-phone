@@ -4,12 +4,13 @@
 #include <TaskScheduler.h>
 #include <ESP8266Ping.h>
 #include <ArduinoSIP.h>
+#include <WiFiUdp.h>
   
 #include "utils.h"
 
 #define  LED_WATCHDOG 2
 #define  MAX_DIAL_STRING 64
-#define DEBUGLOG
+
  
 char acSipIn[2048];
 char acSipOut[2048];
@@ -25,7 +26,8 @@ Task sipListenTask(1000, TASK_FOREVER, &sipListen);
 Task sipRegisterTask(1000, TASK_FOREVER, &sipRegisterClient);
 Task toggleLedTask(1000, TASK_FOREVER, &toggleLed);
  
-WiFiManager wm;
+WiFiManager wifi_manager;
+ 
  
 char sip_server_str[256];
 char sip_port_str[6] = "5060";
@@ -38,8 +40,9 @@ WiFiManagerParameter sip_user_password_param("auth", "User Password", sip_user_p
 
 Scheduler runner;
 std::vector<String> myQueue;
- 
-uint16 sip_port;
+
+String sip_server_address; 
+uint16 sip_server_port;
  
 char msg[256];
 uint16 signal_was;
@@ -60,10 +63,11 @@ void testPing(String host){
   void toggleLed(){
     digitalWrite(LED_WATCHDOG, !digitalRead(LED_WATCHDOG));
     
-    if (!SipClient.isRegister() && register_count_timeout> 60){
+    if (!SipClient.isRegister() && register_count_timeout> 10){
       register_count_timeout = 0;
       sprintf(msg, "Unable to register");
       Serial.println(msg);
+      //sipRegisterTask.enable();
       //wm.resetSettings();
       //runner.addTask(wifiConnectTask);
       //wifiConnectTask.enable();
@@ -86,39 +90,41 @@ void wifiConnect() {
     //runner.deleteTask(wifiConnectTask);
     WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
     //reset settings - wipe credentials for testing
-    //wm.resetSettings();
+    //wifi_manager.resetSettings();
     // set dark theme
     //wm.setClass("invert");
     // add a custom input field
     int customFieldLength = 40;
-    new (&sip_server_address_param) WiFiManagerParameter("sip_server_address_id", "Sip Server Address", "10.130.1.100", customFieldLength,"placeholder=\"SIP SERVER address Placeholder\"");
-    wm.addParameter(&sip_server_address_param);
+    new (&sip_server_address_param) WiFiManagerParameter("sip_server_address_id", "Sip Server Address", "sip.voipbuster.com", customFieldLength,"placeholder=\"SIP SERVER address Placeholder\"");
+    wifi_manager.addParameter(&sip_server_address_param);
     new (&sip_port_param) WiFiManagerParameter("sip_port_id", "SIP Port", "5060", customFieldLength,"placeholder=\"SIP port Placeholder\"");
-    wm.addParameter(&sip_port_param);
-    new (&sip_user_name_param) WiFiManagerParameter("sip_user_name_id", "Sip User Name", "Manuel das Couves", customFieldLength,"placeholder=\"SIP User Name\"");
-    wm.addParameter(&sip_user_name_param);
-    new (&sip_user_password_param) WiFiManagerParameter("sip_user_password_id", "Number Digit Port", "123456", customFieldLength,"placeholder=\"Sip User Password\"");
-    wm.addParameter(&sip_user_password_param);
+    wifi_manager.addParameter(&sip_port_param);
+    new (&sip_user_name_param) WiFiManagerParameter("sip_user_name_id", "Sip User Name", "lutete72", customFieldLength,"placeholder=\"SIP User Name\"");
+    wifi_manager.addParameter(&sip_user_name_param);
+    new (&sip_user_password_param) WiFiManagerParameter("sip_user_password_id", "Number Digit Port", "LuiCoe@1972", customFieldLength,"placeholder=\"Sip User Password\"");
+    wifi_manager.addParameter(&sip_user_password_param);
     //wm.setSaveParamsCallback(saveParamCallback);
     // auto generated AP name from chipid with password
     bool ret;
-    ret = wm.autoConnect();
+    ret = wifi_manager.autoConnect();
     if (ret){
       digitalWrite(LED_WATCHDOG, !digitalRead(LED_WATCHDOG));
       Serial.println("Wifi Connected");
       
-      String sip_server_address = String(sip_server_address_param.getValue());
+      //String sip_server_address = String(sip_server_address_param.getValue());
       //Serial.println("connected1");
       //IPAddress sip_ip;
-      //sip_ip.fromString(sip_server_address_param.getValue());
-      sip_port = atoi(sip_port_param.getValue());
-      //dial_timeout =  atoi(dial_timeout_param.getValue());
-      //dial_digits = atoi(dial_digits_param.getValue());
+      sip_server_address = sip_server_address_param.getValue();
+      sip_server_port = atoi(sip_port_param.getValue());
+      String sip_user_name =  String(sip_user_name_param.getValue());
+      String sip_user_password = String(sip_user_password_param.getValue());
       //Serial.println("connected3");
-     
+      
       //mqttClient.setServer(ip, mqtt_port);
-      SipClient.Init(sip_server_address.c_str(), sip_port, sip_server_address.c_str(), sip_port, sip_user_name_str, sip_user_password_str, 15);
+      SipClient.Init(sip_server_address.c_str(), sip_server_port, WiFi.localIP().toString().c_str(), sip_server_port, sip_user_name.c_str(), sip_user_password.c_str(), 15);
       toggleLedTask.enable();
+      
+      Serial.println(msg);
       sipRegisterTask.enable();
     }
  }
@@ -129,9 +135,7 @@ void wifiConnect() {
       //runner.deleteTask(sipRegisterTask); 
       //Task sipRegisterTask(1000, TASK_ONCE, &sipRegisterClient);
       //runner.addTask(sip)
-      //sprintf(msg, "Try to register to SIP Server address %s:%d", sip_server_address.c_str(), sip_port);
-      //Serial.println(msg);
-      SipClient.Register();
+      SipClient.Register(); 
       sipListenTask.enable();
       //sipRegisterTask.setInterval(5000);
       //sipRegisterTask.enable();
@@ -140,8 +144,14 @@ void wifiConnect() {
 
  void sipListen(){
   Serial.println(">>sipListen");
-   // SIP processing
+  //sipListenTask.disable();
+  // SIP processing
   SipClient.Processing(acSipIn, sizeof(acSipIn));
+  if(acSipIn[0] != 0) {
+     //sipListenTask.disable();
+     //acSipIn[0] = 0;
+  }
+  
   Serial.println("<<sipListen");
  }
 
