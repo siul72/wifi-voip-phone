@@ -30,3 +30,10 @@
 *.exe
 *.out
 *.app
+.pio/build/d1_mini/.sconsign39.dblite
+.pio/build/d1_mini/firmware.bin
+.pio/build/d1_mini/firmware.elf
+.pio/build/d1_mini/idedata.json
+.pio/build/d1_mini/ld/local.eagle.app.v6.common.ld
+.pio/build/project.checksum
+.vscode/c_cpp_properties.json
